@@ -1,7 +1,25 @@
 // api/wines.js
 // GET  /api/wines          → 전체 와인 목록 반환
 // GET  /api/wines?type=red → 타입 필터
-// Vercel KV (Redis) 에 저장된 JSON을 반환합니다.
+// Redis Cloud (ioredis) 에 저장된 JSON을 반환합니다.
+//
+// 환경변수 (Vercel 대시보드 → Settings → Environment Variables):
+//   REDIS_URL = redis://default:PASSWORD@host:port
+//   ADMIN_SECRET = 본인이 정한 관리자 비밀번호
+
+import Redis from 'ioredis';
+
+let redis = null;
+
+function getRedis() {
+  if (!redis && process.env.REDIS_URL) {
+    redis = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      connectTimeout: 5000,
+    });
+  }
+  return redis;
+}
 
 export default async function handler(req, res) {
   // CORS preflight
@@ -14,13 +32,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Vercel KV에서 와인 데이터 읽기
-    // KV_REST_API_URL, KV_REST_API_TOKEN 은 Vercel 대시보드 환경변수에서 설정
-    const kvUrl   = process.env.KV_REST_API_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN;
+    const client = getRedis();
 
-    if (!kvUrl || !kvToken) {
-      // 환경변수 미설정 시 샘플 데이터 반환 (개발용)
+    // REDIS_URL 환경변수 없으면 샘플 데이터 반환 (개발용)
+    if (!client) {
       return res.status(200).json({
         ok: true,
         count: SAMPLE_WINES.length,
@@ -29,18 +44,9 @@ export default async function handler(req, res) {
       });
     }
 
-    const kvRes = await fetch(`${kvUrl}/get/wine_list`, {
-      headers: { Authorization: `Bearer ${kvToken}` },
-    });
+    const raw = await client.get('wine_list');
 
-    if (!kvRes.ok) {
-      throw new Error(`KV fetch failed: ${kvRes.status}`);
-    }
-
-    const { result } = await kvRes.json();
-
-    if (!result) {
-      // 아직 업로드 전
+    if (!raw) {
       return res.status(200).json({
         ok: true,
         count: 0,
@@ -50,7 +56,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const data = JSON.parse(result);
+    const data = JSON.parse(raw);
 
     return res.status(200).json({
       ok: true,
@@ -69,9 +75,9 @@ export default async function handler(req, res) {
 function filterWines(wines, query = {}) {
   let list = [...wines];
 
-  if (query.type)     list = list.filter(w => w.type === query.type);
+  if (query.type) list = list.filter(w => w.type === query.type);
   if (query.in_stock) list = list.filter(w => String(w.in_stock).toLowerCase() === 'true');
-  if (query.style)    list = list.filter(w => (w.style || '').includes(query.style));
+  if (query.style) list = list.filter(w => (w.style || '').includes(query.style));
   if (query.max_price) list = list.filter(w => Number(w.price) <= Number(query.max_price));
 
   return list;
