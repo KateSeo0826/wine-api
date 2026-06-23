@@ -1,0 +1,118 @@
+// api/upload.js
+// POST /api/upload  multipart/form-data  field: "file" (.xlsx)
+// 관리자 키 헤더: x-admin-key: <ADMIN_SECRET 환경변수>
+// 엑셀을 파싱해 Vercel KV 에 JSON으로 저장합니다.
+
+import { IncomingForm } from 'multiparty';
+import * as XLSX from 'xlsx';
+import fs from 'fs';
+
+export const config = {
+  api: { bodyParser: false },  // multipart 직접 처리
+};
+
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // ── 인증 ──────────────────────────────────────────────────────
+  const adminKey = process.env.ADMIN_SECRET;
+  if (adminKey && req.headers['x-admin-key'] !== adminKey) {
+    return res.status(401).json({ ok: false, error: '인증 실패' });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // ── 파일 파싱 ─────────────────────────────────────────────
+    const { filePath, originalName } = await parseMultipart(req);
+
+    // ── 엑셀 → JSON ───────────────────────────────────────────
+    const wb   = XLSX.readFile(filePath);
+    const ws   = wb.Sheets['와인목록'] ?? wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    // 헤더 노트 행 제거 (row에 실제 id가 없으면 스킵)
+    const wines = rows
+      .filter(r => r.id && !isNaN(Number(r.id)))
+      .map(r => ({
+        id:           Number(r.id),
+        name:         String(r.name || '').trim(),
+        type:         String(r.type || '').trim().toLowerCase(),
+        country:      String(r.country || '').trim(),
+        varietal:     String(r.varietal || '').trim(),
+        price:        Number(String(r.price).replace(/[^0-9]/g, '')) || 0,
+        vintage:      r.vintage ? Number(r.vintage) : null,
+        region:       String(r.region || '').trim(),
+        tasting_note: String(r.tasting_note || '').trim(),
+        food_tags:    String(r.food_tags || '').trim(),
+        style:        String(r.style || '').trim(),
+        in_stock:     String(r.in_stock).toLowerCase() === 'true',
+        image_url:    String(r.image_url || '').trim(),
+      }));
+
+    if (wines.length === 0) {
+      return res.status(400).json({ ok: false, error: '파싱된 와인이 없습니다. 시트 이름이 "와인목록"인지 확인해주세요.' });
+    }
+
+    // ── Vercel KV 저장 ────────────────────────────────────────
+    const kvUrl   = process.env.KV_REST_API_URL;
+    const kvToken = process.env.KV_REST_API_TOKEN;
+
+    if (!kvUrl || !kvToken) {
+      // KV 미설정 시 파싱 결과만 반환 (테스트용)
+      return res.status(200).json({
+        ok: true,
+        message: 'KV 미연결 — 파싱 결과 미리보기',
+        count: wines.length,
+        preview: wines.slice(0, 3),
+      });
+    }
+
+    const payload = JSON.stringify({ updated_at: new Date().toISOString(), wines });
+    const kvRes = await fetch(`${kvUrl}/set/wine_list`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${kvToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ value: payload }),
+    });
+
+    if (!kvRes.ok) {
+      throw new Error(`KV 저장 실패: ${kvRes.status}`);
+    }
+
+    // 임시 파일 정리
+    fs.unlinkSync(filePath);
+
+    return res.status(200).json({
+      ok: true,
+      message: `✅ ${wines.length}개 와인이 업데이트됐습니다.`,
+      count: wines.length,
+      file: originalName,
+      updated_at: new Date().toISOString(),
+    });
+
+  } catch (err) {
+    console.error('[upload] error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+// ── multipart 파일 파싱 헬퍼 ─────────────────────────────────────
+function parseMultipart(req) {
+  return new Promise((resolve, reject) => {
+    const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
+    form.parse(req, (err, _fields, files) => {
+      if (err) return reject(err);
+      const uploaded = files.file?.[0] ?? files.file;
+      if (!uploaded) return reject(new Error('file 필드가 없습니다.'));
+      resolve({
+        filePath:     uploaded.path ?? uploaded.filepath,
+        originalName: uploaded.originalFilename ?? uploaded.name ?? 'wine.xlsx',
+      });
+    });
+  });
+}

@@ -1,0 +1,9 @@
+{
+  "name": "wine-api",
+  "version": "1.0.0",
+  "description": "Wine list API for Imweb",
+  "dependencies": {
+    "xlsx": "^0.18.5",
+    "multiparty": "^4.2.3"
+  }
+}
