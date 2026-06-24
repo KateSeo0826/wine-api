@@ -4,7 +4,8 @@
   "description": "Wine list API for Imweb",
   "type": "module",
   "dependencies": {
-    "xlsx": "^0.18.5",
-    "multiparty": "^4.2.3"
+    "ioredis": "^5.11.1",
+    "multiparty": "^4.2.3",
+    "xlsx": "^0.18.5"
   }
 }
