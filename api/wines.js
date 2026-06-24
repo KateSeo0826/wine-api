@@ -57,12 +57,13 @@ export default async function handler(req, res) {
     const raw = await client.get('wine_list');
 
     if (!raw) {
+      // Redis에 데이터 없으면 샘플 데이터 반환
       return res.status(200).json({
         ok: true,
-        count: 0,
+        count: SAMPLE_WINES.length,
         updated_at: null,
-        wines: [],
-        message: '아직 와인 목록이 업로드되지 않았습니다.',
+        source: 'sample',
+        wines: filterWines(SAMPLE_WINES, req.query),
       });
     }
 
