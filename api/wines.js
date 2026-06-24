@@ -106,6 +106,8 @@ function filterWines(wines, query = {}) {
   return list;
 }
 
+
+
 // ── 개발용 샘플 데이터 (16개 전체) ────────────────────────────────
 const SAMPLE_WINES = [
   // 🔴 레드
