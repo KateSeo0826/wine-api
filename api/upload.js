@@ -112,7 +112,6 @@ export default async function handler(req, res) {
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
-
     form.parse(req, (err, _fields, files) => {
       if (err) return reject(err);
       const uploaded = files.file?.[0] ?? files.file;
