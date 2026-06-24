@@ -6,7 +6,8 @@
 // 환경변수 (Vercel 대시보드 → Settings → Environment Variables):
 //   REDIS_URL = redis://default:PASSWORD@host:port
 
-import { IncomingForm } from 'multiparty';
+import pkg from 'multiparty';
+const { IncomingForm } = pkg;
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import Redis from 'ioredis';
