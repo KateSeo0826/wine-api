@@ -4,8 +4,7 @@
 // 엑셀을 파싱해 Redis Cloud (ioredis) 에 JSON으로 저장합니다.
 //
 // 환경변수 (Vercel 대시보드 → Settings → Environment Variables):
-//   REDIS_URL    = redis://default:PASSWORD@host:port
-//   ADMIN_SECRET = 본인이 정한 관리자 비밀번호
+//   REDIS_URL = redis://default:PASSWORD@host:port
 
 import { IncomingForm } from 'multiparty';
 import * as XLSX from 'xlsx';
@@ -27,14 +26,19 @@ export const config = {
   api: { bodyParser: false },  // multipart 직접 처리
 };
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') return res.status(200).end();
+// CORS 헤더 공통 설정
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
+  res.setHeader('Access-Control-Max-Age', '86400');
+}
 
-  // ── 인증 ──────────────────────────────────────────────────────
-  const adminKey = process.env.ADMIN_SECRET;
-  if (adminKey && req.headers['x-admin-key'] !== adminKey) {
-    return res.status(401).json({ ok: false, error: '인증 실패' });
-  }
+export default async function handler(req, res) {
+  setCors(res);
+
+  // OPTIONS preflight 즉시 응답
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
