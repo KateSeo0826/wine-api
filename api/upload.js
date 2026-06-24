@@ -111,14 +111,40 @@ export default async function handler(req, res) {
 // ── multipart 파일 파싱 헬퍼 ─────────────────────────────────────
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
-    const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
-    form.parse(req, (err, _fields, files) => {
+    const form = new IncomingForm({
+      uploadDir: '/tmp',
+      keepExtensions: true
+    });
+
+    form.parse(req, (err, fields, files) => {
+
+      console.log('FIELDS:', fields);
+      console.log('FILES:', files);
+
       if (err) return reject(err);
-      const uploaded = files.file?.[0] ?? files.file;
-      if (!uploaded) return reject(new Error('file 필드가 없습니다.'));
+
+      const uploaded = Array.isArray(files.file)
+        ? files.file[0]
+        : files.file;
+
+      console.log('UPLOADED:', uploaded);
+
+      if (!uploaded) {
+        return reject(new Error('file 필드가 없습니다.'));
+      }
+
+      const filePath =
+        uploaded.filepath ||
+        uploaded.path;
+
+      console.log('FILE PATH:', filePath);
+
       resolve({
-        filePath: uploaded.path ?? uploaded.filepath,
-        originalName: uploaded.originalFilename ?? uploaded.name ?? 'wine.xlsx',
+        filePath,
+        originalName:
+          uploaded.originalFilename ||
+          uploaded.name ||
+          'wine.xlsx',
       });
     });
   });
