@@ -44,41 +44,53 @@ export default async function handler(req, res) {
   try {
     const client = getRedis();
 
-    // REDIS_URL 환경변수 없으면 샘플 데이터 반환 (개발용)
+    // Redis 없으면 바로 샘플 반환
     if (!client) {
       return res.status(200).json({
-        ok: true,
+        ok: true, source: 'sample',
         count: SAMPLE_WINES.length,
-        updated_at: new Date().toISOString(),
         wines: filterWines(SAMPLE_WINES, req.query),
       });
     }
 
-    const raw = await client.get('wine_list');
-
-    if (!raw) {
-      // Redis에 데이터 없으면 샘플 데이터 반환
+    let raw = null;
+    try {
+      raw = await client.get('wine_list');
+    } catch (redisErr) {
+      // Redis 연결 에러나도 샘플 반환
+      console.warn('[wines] Redis error, using sample:', redisErr.message);
       return res.status(200).json({
-        ok: true,
+        ok: true, source: 'sample',
         count: SAMPLE_WINES.length,
-        updated_at: null,
-        source: 'sample',
+        wines: filterWines(SAMPLE_WINES, req.query),
+      });
+    }
+
+    // Redis에 데이터 없으면 샘플 반환
+    if (!raw) {
+      return res.status(200).json({
+        ok: true, source: 'sample',
+        count: SAMPLE_WINES.length,
         wines: filterWines(SAMPLE_WINES, req.query),
       });
     }
 
     const data = JSON.parse(raw);
-
     return res.status(200).json({
-      ok: true,
+      ok: true, source: 'redis',
       count: data.wines.length,
       updated_at: data.updated_at,
       wines: filterWines(data.wines, req.query),
     });
 
   } catch (err) {
-    console.error('[wines] error:', err);
-    return res.status(500).json({ ok: false, error: err.message });
+    // 최후 방어 — 어떤 에러든 샘플 반환
+    console.error('[wines] unexpected error:', err);
+    return res.status(200).json({
+      ok: true, source: 'sample',
+      count: SAMPLE_WINES.length,
+      wines: filterWines(SAMPLE_WINES, req.query),
+    });
   }
 }
 
