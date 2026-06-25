@@ -7,6 +7,10 @@ import XLSX from "xlsx";
 
 let redis = null;
 
+const clean = (v) =>
+  String(v || "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
 function getRedis() {
   if (!redis && process.env.REDIS_URL) {
     redis = new Redis(process.env.REDIS_URL, {
@@ -82,7 +86,7 @@ export default async function handler(req, res) {
         style: String(r.style || "").trim(),
         in_stock: String(r.in_stock || "").toLowerCase() === "true",
         image_url: String(r.image_url || "").trim(),
-        product_url: String(r.product_url || "").trim(),
+        product_url: clean(r.product_url),
       }))
       .filter(w => w.name); // 이름 없는 데이터 제거
 
