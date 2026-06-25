@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import fs from 'fs';
 import Redis from 'ioredis';
 import pkg from 'multiparty';
+import multiparty from 'multiparty';
 
 let redis = null;
 function getRedis() {
