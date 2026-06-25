@@ -7,7 +7,6 @@
 //   REDIS_URL = redis://default:PASSWORD@host:port
 
 import pkg from 'multiparty';
-const { IncomingForm } = pkg;
 import * as XLSX from 'xlsx';
 import fs from 'fs';
 import Redis from 'ioredis';
@@ -70,6 +69,7 @@ export default async function handler(req, res) {
         style: String(r.style || '').trim(),
         in_stock: String(r.in_stock).toLowerCase() === 'true',
         image_url: String(r.image_url || '').trim(),
+        product_url: Number(r.product_url)
       }));
 
     if (wines.length === 0) {
@@ -112,14 +112,22 @@ export default async function handler(req, res) {
 // ── multipart 파일 파싱 헬퍼 ─────────────────────────────────────
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
-    const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
-    form.parse(req, (err, _fields, files) => {
+    const form = new multiparty.Form({
+      uploadDir: '/tmp'
+    });
+
+    form.parse(req, (err, fields, files) => {
       if (err) return reject(err);
-      const uploaded = files.file?.[0] ?? files.file;
-      if (!uploaded) return reject(new Error('file 필드가 없습니다.'));
+
+      const uploaded = files.file?.[0];
+
+      if (!uploaded) {
+        return reject(new Error('file 필드가 없습니다.'));
+      }
+
       resolve({
-        filePath: uploaded.path ?? uploaded.filepath,
-        originalName: uploaded.originalFilename ?? uploaded.name ?? 'wine.xlsx',
+        filePath: uploaded.path,
+        originalName: uploaded.originalFilename || 'wine.xlsx'
       });
     });
   });
